@@ -114,10 +114,11 @@ export const runTask = createServerFn({ method: "POST" })
     });
     if (p.json) {
       try {
-        return { kind: data.kind, json: extractJson(raw), text: null as string | null };
+        const parsed: unknown = extractJson(raw);
+        return { kind: data.kind, json: parsed, text: null as string | null };
       } catch {
-        return { kind: data.kind, json: null, text: raw };
+        return { kind: data.kind, json: null as unknown, text: raw };
       }
     }
-    return { kind: data.kind, json: null, text: raw };
+    return { kind: data.kind, json: null as unknown, text: raw };
   });
