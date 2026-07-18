@@ -240,7 +240,7 @@ function TopNav({
         <div className="leading-tight">
           <div className="font-display text-lg">CodeSherlock</div>
           <div className="text-[10px] font-mono-tight uppercase tracking-[0.25em] text-muted-foreground">
-            AI · Repository Detective
+            Repository Detective
           </div>
         </div>
       </div>

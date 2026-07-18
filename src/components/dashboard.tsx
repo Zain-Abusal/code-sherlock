@@ -95,7 +95,7 @@ export function Dashboard({ analysis, provider, repoUrl, onReset, onReanalyze }:
       <div className="mt-8 grid gap-4 md:grid-cols-3">
         <HealthCard analysis={analysis} />
         <div className="glass-card md:col-span-2 rounded-xl p-6 animate-glass-in">
-          <SectionTitle icon={<Sparkles className="h-4 w-4" />} label="AI Overview" />
+          <SectionTitle icon={<Sparkles className="h-4 w-4" />} label="Overview" />
           <p className="mt-3 leading-relaxed text-foreground/90">{analysis.overview}</p>
           <div className="mt-4 grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
             <Meta label="Built for" value={analysis.audience} />
@@ -653,7 +653,7 @@ function BugPanel({
       loading={loading}
       error={error}
       actions={<Button onClick={run} className="gap-2"><Bug className="h-4 w-4" /> Hunt bugs</Button>}
-      empty={<p className="text-sm text-muted-foreground">Click "Hunt bugs" to scan for risks. Runs one AI call.</p>}
+      empty={<p className="text-sm text-muted-foreground">Click "Hunt bugs" to scan for risks. Runs one analysis call.</p>}
     >
       {items && (
         <div className="grid gap-3 md:grid-cols-2">
@@ -678,7 +678,7 @@ function BugPanel({
               )}
               {it.fix && (
                 <div className="mt-3 rounded-md border border-amber/30 bg-amber/5 p-2 text-sm text-foreground/90">
-                  <span className="text-[10px] font-mono-tight uppercase tracking-widest text-amber">AI fix</span>
+                  <span className="text-[10px] font-mono-tight uppercase tracking-widest text-amber">Suggested fix</span>
                   <div className="mt-1">{it.fix}</div>
                 </div>
               )}
@@ -721,7 +721,7 @@ function RefactorPanel({
       loading={loading}
       error={error}
       actions={<Button onClick={run} className="gap-2"><Wrench className="h-4 w-4" /> Improve this repository</Button>}
-      empty={<p className="text-sm text-muted-foreground">AI suggests folder restructuring, duplicated code, naming, and performance wins.</p>}
+      empty={<p className="text-sm text-muted-foreground">Suggests folder restructuring, duplicated code, naming, and performance wins.</p>}
     >
       {data && (
         <div className="grid gap-4 md:grid-cols-2">
@@ -890,7 +890,7 @@ function RoadmapPanel({
       loading={loading}
       error={error}
       actions={<Button onClick={run} className="gap-2"><Rocket className="h-4 w-4" /> Suggest roadmap</Button>}
-      empty={<p className="text-sm text-muted-foreground">AI proposes priorities, effort, and business value.</p>}
+      empty={<p className="text-sm text-muted-foreground">Proposes priorities, effort, and business value.</p>}
     >
       {items && (
         <ul className="space-y-3">

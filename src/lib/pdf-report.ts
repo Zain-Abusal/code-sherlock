@@ -58,7 +58,7 @@ export function downloadAnalysisPdf(a: AnalysisResult) {
     setC(COLOR.muted);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
-    doc.text("CodeSherlock AI — Repository Intelligence Report", margin, pageH - 24);
+    doc.text("CodeSherlock — Repository Intelligence Report", margin, pageH - 24);
     doc.text(String(pageNum), pageW - margin, pageH - 24, { align: "right" });
     setD(COLOR.hair);
     doc.setLineWidth(0.5);
@@ -122,7 +122,7 @@ export function downloadAnalysisPdf(a: AnalysisResult) {
   doc.text("S", margin + 8, y + 19);
   setC(COLOR.ink);
   doc.setFontSize(11);
-  doc.text("CodeSherlock AI", margin + 36, y + 12);
+  doc.text("CodeSherlock", margin + 36, y + 12);
   setC(COLOR.muted);
   doc.setFontSize(8);
   doc.text("REPOSITORY INTELLIGENCE REPORT", margin + 36, y + 24);

@@ -273,21 +273,21 @@ export const analyzeRepo = createServerFn({ method: "POST" })
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      throw new Error(`AI analysis failed. ${msg}`);
+      throw new Error(`Analysis failed. ${msg}`);
     }
 
     type AiPart = Omit<AnalysisResult, "meta" | "stats" | "keyFiles" | "timeline">;
     const fallback: AiPart = {
       overview:
         raw.trim().slice(0, 800) ||
-        `${meta.full_name} is a ${meta.language ?? "software"} project. Automatic AI parsing failed, so this is a minimal summary based on repository metadata only.`,
+        `${meta.full_name} is a ${meta.language ?? "software"} project. Automatic parsing failed, so this is a minimal summary based on repository metadata only.`,
       audience: "developers exploring this repository",
       complexity: "medium",
       learningCurve: "moderate",
       technologies: meta.language ? [meta.language] : [],
       healthScore: 60,
       healthBreakdown: [
-        { label: "Documentation", verdict: "warn", note: "Could not fully assess — AI response was unparseable." },
+        { label: "Documentation", verdict: "warn", note: "Could not fully assess — analysis response was unparseable." },
         { label: "Maintenance", verdict: meta.pushed_at ? "good" : "warn", note: `Last push ${new Date(meta.pushed_at).toLocaleDateString()}.` },
         { label: "License", verdict: meta.license?.spdx_id ? "good" : "warn", note: meta.license?.spdx_id ?? "No license detected." },
       ],

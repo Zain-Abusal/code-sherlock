@@ -48,7 +48,7 @@ function promptFor(input: TaskInputT): { user: string; json: boolean; maxTokens:
       return {
         json: true,
         maxTokens: 1600,
-        user: `Given this repository snapshot:\n${ctx}\n\nHunt likely bugs, security risks, and code smells. Return JSON:\n{"items":[{"title":"...","severity":"critical|warning|suggestion","reason":"...","files":["..."],"fix":"suggested AI fix, 2-4 sentences"}]}\nInclude 4–10 items, ordered by severity.`,
+        user: `Given this repository snapshot:\n${ctx}\n\nHunt likely bugs, security risks, and code smells. Return JSON:\n{"items":[{"title":"...","severity":"critical|warning|suggestion","reason":"...","files":["..."],"fix":"suggested fix, 2-4 sentences"}]}\nInclude 4–10 items, ordered by severity.`,
       };
     case "refactor":
       return {
