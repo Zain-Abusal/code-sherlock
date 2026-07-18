@@ -98,6 +98,7 @@ function promptFor(input: TaskInputT): { user: string; json: boolean; maxTokens:
 export const runTask = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => TaskInput.parse(data))
   .handler(async ({ data }) => {
+    const started = Date.now();
     if (data.provider !== "ollama" && !data.apiKey)
       throw new Error("API key required for the selected provider.");
     const p = promptFor(data);
@@ -112,6 +113,7 @@ export const runTask = createServerFn({ method: "POST" })
       maxTokens: p.maxTokens,
       temperature: data.kind === "chat" ? 0.4 : 0.3,
     });
+    const latencyMs = Date.now() - started;
     if (p.json) {
       try {
         const parsed = extractJson(raw);
@@ -119,10 +121,11 @@ export const runTask = createServerFn({ method: "POST" })
           kind: data.kind,
           jsonString: JSON.stringify(parsed),
           text: null as string | null,
+          latencyMs,
         };
       } catch {
-        return { kind: data.kind, jsonString: null as string | null, text: raw };
+        return { kind: data.kind, jsonString: null as string | null, text: raw, latencyMs };
       }
     }
-    return { kind: data.kind, jsonString: null as string | null, text: raw };
+    return { kind: data.kind, jsonString: null as string | null, text: raw, latencyMs };
   });

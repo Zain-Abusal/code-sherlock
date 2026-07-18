@@ -13,6 +13,8 @@ export interface RepoMeta {
   created_at: string;
   html_url: string;
   owner: { login: string; avatar_url: string };
+  private?: boolean;
+  visibility?: string;
 }
 
 export interface TreeEntry {
@@ -55,9 +57,22 @@ export async function fetchRepoMeta(
     headers: ghHeaders(token),
   });
   if (!res.ok) {
-    throw new Error(
-      `GitHub ${res.status}: ${res.status === 404 ? "Repository not found or private." : "Could not fetch repo metadata."}`,
-    );
+    if (res.status === 404) {
+      throw new Error(
+        token
+          ? "Repository not found. If it's private, make sure your GitHub token has the `repo` scope and access to this repository."
+          : "Repository not found or private. Add a GitHub Personal Access Token (top-right settings → GitHub token) with `repo` scope to analyze private repositories.",
+      );
+    }
+    if (res.status === 401) {
+      throw new Error("GitHub rejected the token (401). Generate a new PAT with `repo` scope.");
+    }
+    if (res.status === 403) {
+      throw new Error(
+        "GitHub 403 — token missing scope or rate-limited. For private repos ensure `repo` scope; for public retry in a minute.",
+      );
+    }
+    throw new Error(`GitHub ${res.status}: could not fetch repository metadata.`);
   }
   return (await res.json()) as RepoMeta;
 }
