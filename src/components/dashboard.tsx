@@ -23,7 +23,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import type { AnalysisResult } from "@/lib/analyze.functions";
 import type { ProviderState } from "@/components/provider-picker";
-import { runTask } from "@/lib/task.functions";
+import { runTask, type TaskInputT } from "@/lib/task.functions";
 
 interface Props {
   analysis: AnalysisResult;
@@ -361,12 +361,10 @@ function TabTrigger({
 
 /* ------------------------------ Panels ------------------------------ */
 
-function useTaskCall(provider: ProviderState) {
+function useTaskCall(_provider: ProviderState) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const call = async (
-    args: Parameters<typeof runTask>[0] extends { data: infer D } ? D : never,
-  ) => {
+  const call = async (args: TaskInputT) => {
     setLoading(true);
     setError(null);
     try {
