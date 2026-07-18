@@ -8,11 +8,13 @@ import {
   FileText,
   GitBranch,
   GraduationCap,
+  Lock,
   Loader2,
   MessageSquare,
   RefreshCw,
   Rocket,
   Send,
+  ShieldAlert,
   ShieldCheck,
   Sparkles,
   Star,
@@ -28,6 +30,7 @@ import type { ProviderState } from "@/components/provider-picker";
 import { runTask, type TaskInputT } from "@/lib/task.functions";
 import { downloadAnalysisPdf } from "@/lib/pdf-report";
 import { getCachedTask, saveTask } from "@/lib/analysis-cache";
+import { downloadAudit, listAudit, logAudit, clearAudit } from "@/lib/audit-log";
 
 interface Props {
   analysis: AnalysisResult;
@@ -69,12 +72,23 @@ export function Dashboard({ analysis, provider, repoUrl, onReset, onReanalyze }:
   const repoContext = useRepoContext(analysis);
 
   return (
-    <div className="mx-auto max-w-6xl px-4 pb-24 pt-6 md:px-8">
+    <main
+      id="main-content"
+      className="mx-auto max-w-6xl px-4 pb-24 pt-6 md:px-8"
+    >
       <TopBar
         analysis={analysis}
         onReset={onReset}
         onReanalyze={onReanalyze}
-        onDownload={() => downloadAnalysisPdf(analysis)}
+        onDownload={() => {
+          downloadAnalysisPdf(analysis);
+          logAudit({
+            kind: "pdf_export",
+            repo: analysis.meta.fullName,
+            ok: true,
+            detail: "PDF intelligence report",
+          });
+        }}
       />
       <Hero analysis={analysis} />
 
@@ -115,29 +129,33 @@ export function Dashboard({ analysis, provider, repoUrl, onReset, onReanalyze }:
             <TabTrigger value="docs" icon={<FileText className="h-3.5 w-3.5" />} label="Documentation" />
             <TabTrigger value="learning" icon={<GraduationCap className="h-3.5 w-3.5" />} label="Learning" />
             <TabTrigger value="roadmap" icon={<Rocket className="h-3.5 w-3.5" />} label="What's Next" />
+            <TabTrigger value="audit" icon={<ShieldAlert className="h-3.5 w-3.5" />} label="Audit Trail" />
           </TabsList>
 
           <TabsContent value="chat">
             <ChatPanel analysis={analysis} provider={provider} repoContext={repoContext} />
           </TabsContent>
           <TabsContent value="bugs">
-            <BugPanel provider={provider} repoContext={repoContext} repoUrl={repoUrl} />
+            <BugPanel provider={provider} repoContext={repoContext} repoUrl={repoUrl} repoName={analysis.meta.fullName} />
           </TabsContent>
           <TabsContent value="refactor">
-            <RefactorPanel provider={provider} repoContext={repoContext} repoUrl={repoUrl} />
+            <RefactorPanel provider={provider} repoContext={repoContext} repoUrl={repoUrl} repoName={analysis.meta.fullName} />
           </TabsContent>
           <TabsContent value="docs">
-            <DocsPanel provider={provider} repoContext={repoContext} />
+            <DocsPanel provider={provider} repoContext={repoContext} repoName={analysis.meta.fullName} />
           </TabsContent>
           <TabsContent value="learning">
-            <LearningPanel provider={provider} repoContext={repoContext} />
+            <LearningPanel provider={provider} repoContext={repoContext} repoName={analysis.meta.fullName} />
           </TabsContent>
           <TabsContent value="roadmap">
-            <RoadmapPanel provider={provider} repoContext={repoContext} repoUrl={repoUrl} />
+            <RoadmapPanel provider={provider} repoContext={repoContext} repoUrl={repoUrl} repoName={analysis.meta.fullName} />
+          </TabsContent>
+          <TabsContent value="audit">
+            <AuditPanel />
           </TabsContent>
         </Tabs>
       </div>
-    </div>
+    </main>
   );
 }
 
@@ -203,6 +221,16 @@ function Hero({ analysis }: { analysis: AnalysisResult }) {
     <div className="mt-8 animate-glass-in">
       <div className="flex items-center gap-2 text-xs font-mono-tight uppercase tracking-[0.3em] text-amber">
         <span>Case file #{analysis.meta.fullName.length.toString().padStart(4, "0")}</span>
+        {analysis.meta.isPrivate && (
+          <span className="inline-flex items-center gap-1 rounded-full border border-amber/40 bg-amber/5 px-2 py-0.5 text-[10px] normal-case tracking-normal text-amber">
+            <Lock className="h-3 w-3" aria-hidden /> private
+          </span>
+        )}
+        {analysis.perf?.servedFromCache && (
+          <span className="inline-flex items-center gap-1 rounded-full border border-emerald/40 bg-emerald/5 px-2 py-0.5 text-[10px] normal-case tracking-normal text-emerald">
+            server cache · {analysis.perf.latencyMs}ms
+          </span>
+        )}
       </div>
       <h1 className="mt-2 font-display text-5xl leading-[1.05] text-foreground md:text-6xl">
         {analysis.meta.fullName}
@@ -408,14 +436,35 @@ function TabTrigger({
 function useTaskCall(_provider: ProviderState) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const call = async (args: TaskInputT) => {
+  const call = async (args: TaskInputT, meta?: { repo?: string }) => {
     setLoading(true);
     setError(null);
+    const started = Date.now();
     try {
       const res = await runTask({ data: args });
+      logAudit({
+        kind: args.kind === "chat" ? "chat" : "task",
+        provider: args.provider,
+        model: args.model,
+        repo: meta?.repo,
+        ok: true,
+        latencyMs:
+          (res as { latencyMs?: number }).latencyMs ?? Date.now() - started,
+        detail: args.kind,
+      });
       return res;
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
+      logAudit({
+        kind: "error",
+        provider: args.provider,
+        model: args.model,
+        repo: meta?.repo,
+        ok: false,
+        latencyMs: Date.now() - started,
+        detail: `${args.kind}: ${msg.slice(0, 120)}`,
+      });
       throw e;
     } finally {
       setLoading(false);
@@ -488,7 +537,10 @@ function ChatPanel({
     setInput("");
     setMessages((m) => [...m, { role: "user", text: question }]);
     try {
-      const res = await call({ ...baseArgs(provider, repoContext), kind: "chat", question });
+      const res = await call(
+        { ...baseArgs(provider, repoContext), kind: "chat", question },
+        { repo: analysis.meta.fullName },
+      );
       setMessages((m) => [...m, { role: "assistant", text: res.text ?? "…" }]);
     } catch {
       /* handled */
@@ -563,10 +615,12 @@ function BugPanel({
   provider,
   repoContext,
   repoUrl,
+  repoName,
 }: {
   provider: ProviderState;
   repoContext: string;
   repoUrl: string;
+  repoName?: string;
 }) {
   const [items, setItems] = useState<
     | null
@@ -581,7 +635,7 @@ function BugPanel({
   const { loading, error, call } = useTaskCall(provider);
 
   const run = async () => {
-    const res = await call({ ...baseArgs(provider, repoContext), kind: "bugs" });
+    const res = await call({ ...baseArgs(provider, repoContext), kind: "bugs" }, { repo: repoName });
     if (res.jsonString) {
       const parsed = JSON.parse(res.jsonString) as { items?: typeof items };
       const next = parsed.items ?? [];
@@ -640,10 +694,12 @@ function RefactorPanel({
   provider,
   repoContext,
   repoUrl,
+  repoName,
 }: {
   provider: ProviderState;
   repoContext: string;
   repoUrl: string;
+  repoName?: string;
 }) {
   const [data, setData] = useState<null | {
     restructure?: { from: string; to: string; why: string }[];
@@ -653,7 +709,7 @@ function RefactorPanel({
   }>(() => getCachedTask(repoUrl, provider.model, "refactor"));
   const { loading, error, call } = useTaskCall(provider);
   const run = async () => {
-    const res = await call({ ...baseArgs(provider, repoContext), kind: "refactor" });
+    const res = await call({ ...baseArgs(provider, repoContext), kind: "refactor" }, { repo: repoName });
     if (res.jsonString) {
       const parsed = JSON.parse(res.jsonString);
       setData(parsed);
@@ -696,12 +752,12 @@ function RefactorGroup({ title, items }: { title: string; items: { h: string; b:
   );
 }
 
-function DocsPanel({ provider, repoContext }: { provider: ProviderState; repoContext: string }) {
+function DocsPanel({ provider, repoContext, repoName }: { provider: ProviderState; repoContext: string; repoName?: string }) {
   const [kind, setKind] = useState<"readme" | "contributing" | "api" | "onboarding">("readme");
   const [text, setText] = useState<string | null>(null);
   const { loading, error, call } = useTaskCall(provider);
   const run = async () => {
-    const res = await call({ ...baseArgs(provider, repoContext), kind: "docs", docKind: kind });
+    const res = await call({ ...baseArgs(provider, repoContext), kind: "docs", docKind: kind }, { repo: repoName });
     setText(res.text);
   };
   const kinds: { id: typeof kind; label: string }[] = [
@@ -753,12 +809,12 @@ function DocsPanel({ provider, repoContext }: { provider: ProviderState; repoCon
   );
 }
 
-function LearningPanel({ provider, repoContext }: { provider: ProviderState; repoContext: string }) {
+function LearningPanel({ provider, repoContext, repoName }: { provider: ProviderState; repoContext: string; repoName?: string }) {
   const [level, setLevel] = useState<"beginner" | "intermediate" | "advanced">("beginner");
   const [text, setText] = useState<string | null>(null);
   const { loading, error, call } = useTaskCall(provider);
   const run = async () => {
-    const res = await call({ ...baseArgs(provider, repoContext), kind: "learning", learningLevel: level });
+    const res = await call({ ...baseArgs(provider, repoContext), kind: "learning", learningLevel: level }, { repo: repoName });
     setText(res.text);
   };
   return (
@@ -800,10 +856,12 @@ function RoadmapPanel({
   provider,
   repoContext,
   repoUrl,
+  repoName,
 }: {
   provider: ProviderState;
   repoContext: string;
   repoUrl: string;
+  repoName?: string;
 }) {
   const [items, setItems] = useState<
     | null
@@ -817,7 +875,7 @@ function RoadmapPanel({
   >(() => getCachedTask(repoUrl, provider.model, "roadmap"));
   const { loading, error, call } = useTaskCall(provider);
   const run = async () => {
-    const res = await call({ ...baseArgs(provider, repoContext), kind: "roadmap" });
+    const res = await call({ ...baseArgs(provider, repoContext), kind: "roadmap" }, { repo: repoName });
     if (res.jsonString) {
       const parsed = JSON.parse(res.jsonString) as { items?: typeof items };
       const next = parsed.items ?? [];
@@ -852,6 +910,65 @@ function RoadmapPanel({
             </li>
           ))}
         </ul>
+      )}
+    </PanelShell>
+  );
+}
+function AuditPanel() {
+  const [entries, setEntries] = useState(() => listAudit());
+  const refresh = () => setEntries(listAudit());
+  return (
+    <PanelShell
+      actions={
+        <div className="flex w-full flex-wrap items-center justify-between gap-2">
+          <div>
+            <div className="text-xs font-mono-tight uppercase tracking-widest text-amber">Audit Trail</div>
+            <p className="text-xs text-muted-foreground">Workspace-scoped activity log — exportable for compliance.</p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => downloadAudit("csv")} aria-label="Export audit trail as CSV">
+              <Download className="mr-1 h-3.5 w-3.5" aria-hidden /> CSV
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => downloadAudit("json")} aria-label="Export audit trail as JSON">
+              <Download className="mr-1 h-3.5 w-3.5" aria-hidden /> JSON
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => { clearAudit(); refresh(); }} aria-label="Clear audit trail">
+              Clear
+            </Button>
+          </div>
+        </div>
+      }
+    >
+      {entries.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No activity recorded yet.</p>
+      ) : (
+        <div className="overflow-hidden rounded-md border border-border/50">
+          <table className="w-full text-xs">
+            <caption className="sr-only">Audit trail entries</caption>
+            <thead className="bg-background/40 text-left text-[10px] uppercase tracking-widest text-muted-foreground">
+              <tr>
+                <th scope="col" className="px-3 py-2">Time</th>
+                <th scope="col" className="px-3 py-2">Kind</th>
+                <th scope="col" className="px-3 py-2">Repo</th>
+                <th scope="col" className="px-3 py-2">Model</th>
+                <th scope="col" className="px-3 py-2">Latency</th>
+                <th scope="col" className="px-3 py-2">Status</th>
+              </tr>
+            </thead>
+            <tbody className="font-mono-tight">
+              {entries.slice(0, 100).map((e) => (
+                <tr key={e.id} className="border-t border-border/40">
+                  <td className="px-3 py-1.5 text-muted-foreground">{new Date(e.ts).toLocaleTimeString()}</td>
+                  <td className="px-3 py-1.5">{e.kind}</td>
+                  <td className="px-3 py-1.5 text-muted-foreground">{e.repo ?? "—"}</td>
+                  <td className="px-3 py-1.5 text-muted-foreground">{e.model ?? "—"}</td>
+                  <td className="px-3 py-1.5 text-muted-foreground">{e.latencyMs ? `${e.latencyMs}ms` : "—"}</td>
+                  <td className={`px-3 py-1.5 ${e.ok ? "text-emerald" : "text-crimson"}`}>{e.ok ? "ok" : "fail"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </PanelShell>
   );

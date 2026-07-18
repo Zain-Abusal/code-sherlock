@@ -59,6 +59,7 @@ export interface AnalysisResult {
     url: string;
     ownerAvatar: string;
     defaultBranch: string;
+    isPrivate?: boolean;
   };
   stats: {
     fileCount: number;
@@ -79,6 +80,11 @@ export interface AnalysisResult {
   risks: { title: string; severity: "critical" | "warning" | "suggestion"; note: string }[];
   suggestedQuestions: string[];
   timeline: string[];
+  perf?: {
+    latencyMs: number;
+    servedFromCache: boolean;
+    generatedAt: string;
+  };
 }
 
 const KEY_FILE_CANDIDATES = [
@@ -192,12 +198,28 @@ Only include architecture layers that actually exist. Score health honestly base
 export const analyzeRepo = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => AnalyzeInput.parse(data))
   .handler(async ({ data }): Promise<AnalysisResult> => {
+    const started = Date.now();
     const parsed = parseRepoUrl(data.repoUrl);
     if (!parsed) throw new Error("Enter a valid GitHub URL (github.com/owner/repo).");
     if (data.provider !== "ollama" && !data.apiKey)
       throw new Error("API key required for the selected provider.");
 
     const meta = await fetchRepoMeta(parsed.owner, parsed.repo, data.githubToken);
+
+    // ---- Server-side cache (per-worker, TTL 15min, invalidated by pushedAt) ----
+    const cacheKey = `${parsed.owner}/${parsed.repo}::${data.model}::${meta.pushed_at}`;
+    const hit = SERVER_CACHE.get(cacheKey);
+    if (hit && Date.now() - hit.ts < SERVER_TTL_MS) {
+      return {
+        ...hit.value,
+        perf: {
+          latencyMs: Date.now() - started,
+          servedFromCache: true,
+          generatedAt: new Date(hit.ts).toISOString(),
+        },
+      };
+    }
+
     const [langs, treeRes] = await Promise.all([
       fetchLanguages(parsed.owner, parsed.repo, data.githubToken),
       fetchTree(parsed.owner, parsed.repo, meta.default_branch, data.githubToken),
@@ -288,7 +310,7 @@ export const analyzeRepo = createServerFn({ method: "POST" })
       parsedJson = fallback;
     }
 
-    return {
+    const result: AnalysisResult = {
       meta: {
         fullName: meta.full_name,
         description: meta.description,
@@ -301,6 +323,7 @@ export const analyzeRepo = createServerFn({ method: "POST" })
         url: meta.html_url,
         ownerAvatar: meta.owner.avatar_url,
         defaultBranch: meta.default_branch,
+        isPrivate: meta.private ?? false,
       },
       stats: {
         fileCount: paths.length,
@@ -327,5 +350,21 @@ export const analyzeRepo = createServerFn({ method: "POST" })
         `Read ${Object.keys(found).length} key configuration files`,
         `Built knowledge graph`,
       ],
+      perf: {
+        latencyMs: Date.now() - started,
+        servedFromCache: false,
+        generatedAt: new Date().toISOString(),
+      },
     };
+    SERVER_CACHE.set(cacheKey, { value: result, ts: Date.now() });
+    if (SERVER_CACHE.size > 64) {
+      // simple LRU-ish eviction: drop oldest
+      const first = SERVER_CACHE.keys().next().value;
+      if (first) SERVER_CACHE.delete(first);
+    }
+    return result;
   });
+
+// -------- Server-side in-memory cache (per worker instance) --------
+const SERVER_TTL_MS = 15 * 60 * 1000;
+const SERVER_CACHE = new Map<string, { value: AnalysisResult; ts: number }>();

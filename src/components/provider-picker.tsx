@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { KeyRound, Settings2 } from "lucide-react";
+import { CheckCircle2, KeyRound, Loader2, Settings2, XCircle, Zap } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -21,6 +21,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PROVIDERS, getProvider, type ProviderId } from "@/lib/providers";
+import { pingProvider, type HealthResult } from "@/lib/health-check";
+import { logAudit } from "@/lib/audit-log";
 
 export interface ProviderState {
   provider: ProviderId;
@@ -58,8 +60,35 @@ interface Props {
 export function ProviderPicker({ value, onChange }: Props) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<ProviderState>(value);
+  const [health, setHealth] = useState<HealthResult | null>(null);
+  const [pinging, setPinging] = useState(false);
 
-  useEffect(() => setDraft(value), [value, open]);
+  useEffect(() => {
+    setDraft(value);
+    setHealth(null);
+  }, [value, open]);
+
+  const runHealthCheck = async () => {
+    setPinging(true);
+    try {
+      const res = await pingProvider({
+        provider: draft.provider,
+        apiKey: draft.apiKey,
+        baseUrl: draft.baseUrl,
+      });
+      setHealth(res);
+      logAudit({
+        kind: "health_check",
+        provider: draft.provider,
+        model: draft.model,
+        ok: res.ok,
+        latencyMs: res.latencyMs,
+        detail: res.detail,
+      });
+    } finally {
+      setPinging(false);
+    }
+  };
 
   const cfg = getProvider(draft.provider);
   const isConfigured =
@@ -71,13 +100,15 @@ export function ProviderPicker({ value, onChange }: Props) {
         <Button
           type="button"
           variant="outline"
+          aria-label={`Provider settings. Current: ${getProvider(value.provider).label}. ${isConfigured ? "Configured." : "Not configured."}`}
           className="gap-2 border-border/60 bg-card/60 backdrop-blur"
         >
-          <KeyRound className="h-4 w-4 text-amber" />
+          <KeyRound className="h-4 w-4 text-amber" aria-hidden />
           <span className="font-mono-tight text-xs uppercase tracking-wider">
             {getProvider(value.provider).label}
           </span>
           <span
+            aria-hidden
             className={`ml-1 h-1.5 w-1.5 rounded-full ${
               isConfigured ? "bg-emerald" : "bg-crimson"
             }`}
@@ -187,7 +218,17 @@ export function ProviderPicker({ value, onChange }: Props) {
           )}
 
           <div className="grid gap-2">
-            <Label>GitHub token (optional, raises rate limits)</Label>
+            <Label>
+              GitHub token{" "}
+              <a
+                href="https://github.com/settings/tokens?type=beta"
+                target="_blank"
+                rel="noreferrer"
+                className="text-amber underline-offset-4 hover:underline"
+              >
+                create one →
+              </a>
+            </Label>
             <Input
               type="password"
               value={draft.githubToken ?? ""}
@@ -195,9 +236,61 @@ export function ProviderPicker({ value, onChange }: Props) {
               onChange={(e) =>
                 setDraft({ ...draft, githubToken: e.target.value })
               }
-              placeholder="ghp_…"
+              placeholder="github_pat_… or ghp_…"
               className="font-mono-tight"
             />
+            <p className="text-xs text-muted-foreground">
+              <strong className="text-foreground/80">Required for private repos.</strong>{" "}
+              Use a fine-grained PAT with <code className="font-mono-tight text-amber">Contents: Read</code>{" "}
+              (or classic PAT with <code className="font-mono-tight text-amber">repo</code> scope) scoped to
+              the repository. Token stays in this browser and is sent only to GitHub.
+            </p>
+          </div>
+
+          <div className="grid gap-2 rounded-md border border-border/50 bg-background/40 p-3">
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-mono-tight uppercase tracking-widest text-amber">
+                Provider health
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={runHealthCheck}
+                disabled={pinging || (cfg.needsKey && !draft.apiKey)}
+                className="h-7 gap-1 px-2 text-xs"
+                aria-label="Run provider health check"
+              >
+                {pinging ? (
+                  <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+                ) : (
+                  <Zap className="h-3 w-3" aria-hidden />
+                )}
+                Test connection
+              </Button>
+            </div>
+            {health ? (
+              <div
+                role="status"
+                className={`flex items-start gap-2 text-xs ${
+                  health.ok ? "text-emerald" : "text-crimson"
+                }`}
+              >
+                {health.ok ? (
+                  <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+                ) : (
+                  <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+                )}
+                <span>
+                  {health.detail}
+                  {health.status ? ` (HTTP ${health.status})` : ""}
+                </span>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Verifies your key reaches the provider — no billable tokens are used.
+              </p>
+            )}
           </div>
         </div>
 

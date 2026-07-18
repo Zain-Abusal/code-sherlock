@@ -1,9 +1,14 @@
 // Client-side cache for repo analyses and on-demand task results.
 // Keeps results across reloads and avoids repeat AI calls.
 import type { AnalysisResult } from "./analyze.functions";
+import { scopedKey } from "./workspaces";
 
-const KEY = "sherlock:cache:v1";
+const BASE = "sherlock:cache:v1";
 const TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
+
+function KEY(): string {
+  return scopedKey(BASE);
+}
 
 interface Entry {
   analysis: AnalysisResult;
@@ -20,7 +25,7 @@ function keyFor(repoUrl: string, model: string): string {
 function read(): Store {
   if (typeof window === "undefined") return {};
   try {
-    const raw = window.localStorage.getItem(KEY);
+    const raw = window.localStorage.getItem(KEY());
     if (!raw) return {};
     const parsed = JSON.parse(raw) as Store;
     // sweep old entries
@@ -37,7 +42,7 @@ function read(): Store {
 function write(store: Store) {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(KEY, JSON.stringify(store));
+    window.localStorage.setItem(KEY(), JSON.stringify(store));
   } catch {
     /* quota — ignore */
   }
