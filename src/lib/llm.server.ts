@@ -20,6 +20,31 @@ export async function callLLM(input: LLMCallInput): Promise<string> {
   return callOpenAICompatible(input);
 }
 
+function friendlyError(provider: string, status: number, body: string): Error {
+  const snippet = body.slice(0, 300);
+  if (status === 401 || status === 403) {
+    return new Error(
+      `${provider}: API key was rejected (${status}). Double-check the key in the top-right settings — it may be invalid, expired, or missing permissions.`,
+    );
+  }
+  if (status === 404) {
+    return new Error(
+      `${provider}: Model not found. The model ID you selected may not exist or your key can't access it. Try a different model.`,
+    );
+  }
+  if (status === 429) {
+    return new Error(
+      `${provider}: Rate limit or quota exceeded. Wait a moment and try again, or switch to a different provider.`,
+    );
+  }
+  if (status >= 500) {
+    return new Error(
+      `${provider}: Upstream service is temporarily unavailable (${status}). Retry in a few seconds.`,
+    );
+  }
+  return new Error(`${provider} ${status}: ${snippet}`);
+}
+
 function openAiCompatibleBase(input: LLMCallInput): string {
   if (input.baseUrl) return input.baseUrl.replace(/\/+$/, "");
   switch (input.provider) {
@@ -65,7 +90,7 @@ async function callOpenAICompatible(input: LLMCallInput): Promise<string> {
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`${input.provider} ${res.status}: ${text.slice(0, 400)}`);
+    throw friendlyError(input.provider, res.status, text);
   }
   const data = (await res.json()) as {
     choices?: Array<{ message?: { content?: string } }>;
@@ -91,7 +116,7 @@ async function callAnthropic(input: LLMCallInput): Promise<string> {
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`anthropic ${res.status}: ${text.slice(0, 400)}`);
+    throw friendlyError("anthropic", res.status, text);
   }
   const data = (await res.json()) as {
     content?: Array<{ type: string; text?: string }>;
@@ -118,7 +143,7 @@ async function callGemini(input: LLMCallInput): Promise<string> {
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`gemini ${res.status}: ${text.slice(0, 400)}`);
+    throw friendlyError("gemini", res.status, text);
   }
   const data = (await res.json()) as {
     candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;

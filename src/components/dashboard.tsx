@@ -4,11 +4,13 @@ import {
   Bug,
   ChevronRight,
   Compass,
+  Download,
   FileText,
   GitBranch,
   GraduationCap,
   Loader2,
   MessageSquare,
+  RefreshCw,
   Rocket,
   Send,
   ShieldCheck,
@@ -24,11 +26,15 @@ import { Input } from "@/components/ui/input";
 import type { AnalysisResult } from "@/lib/analyze.functions";
 import type { ProviderState } from "@/components/provider-picker";
 import { runTask, type TaskInputT } from "@/lib/task.functions";
+import { downloadAnalysisPdf } from "@/lib/pdf-report";
+import { getCachedTask, saveTask } from "@/lib/analysis-cache";
 
 interface Props {
   analysis: AnalysisResult;
   provider: ProviderState;
+  repoUrl: string;
   onReset: () => void;
+  onReanalyze?: () => void;
 }
 
 function useRepoContext(a: AnalysisResult): string {
@@ -59,12 +65,17 @@ function scoreColor(n: number): string {
   return "text-crimson";
 }
 
-export function Dashboard({ analysis, provider, onReset }: Props) {
+export function Dashboard({ analysis, provider, repoUrl, onReset, onReanalyze }: Props) {
   const repoContext = useRepoContext(analysis);
 
   return (
     <div className="mx-auto max-w-6xl px-4 pb-24 pt-6 md:px-8">
-      <TopBar analysis={analysis} onReset={onReset} />
+      <TopBar
+        analysis={analysis}
+        onReset={onReset}
+        onReanalyze={onReanalyze}
+        onDownload={() => downloadAnalysisPdf(analysis)}
+      />
       <Hero analysis={analysis} />
 
       <div className="mt-8 grid gap-4 md:grid-cols-3">
@@ -110,10 +121,10 @@ export function Dashboard({ analysis, provider, onReset }: Props) {
             <ChatPanel analysis={analysis} provider={provider} repoContext={repoContext} />
           </TabsContent>
           <TabsContent value="bugs">
-            <BugPanel provider={provider} repoContext={repoContext} />
+            <BugPanel provider={provider} repoContext={repoContext} repoUrl={repoUrl} />
           </TabsContent>
           <TabsContent value="refactor">
-            <RefactorPanel provider={provider} repoContext={repoContext} />
+            <RefactorPanel provider={provider} repoContext={repoContext} repoUrl={repoUrl} />
           </TabsContent>
           <TabsContent value="docs">
             <DocsPanel provider={provider} repoContext={repoContext} />
@@ -122,7 +133,7 @@ export function Dashboard({ analysis, provider, onReset }: Props) {
             <LearningPanel provider={provider} repoContext={repoContext} />
           </TabsContent>
           <TabsContent value="roadmap">
-            <RoadmapPanel provider={provider} repoContext={repoContext} />
+            <RoadmapPanel provider={provider} repoContext={repoContext} repoUrl={repoUrl} />
           </TabsContent>
         </Tabs>
       </div>
@@ -130,7 +141,17 @@ export function Dashboard({ analysis, provider, onReset }: Props) {
   );
 }
 
-function TopBar({ analysis, onReset }: { analysis: AnalysisResult; onReset: () => void }) {
+function TopBar({
+  analysis,
+  onReset,
+  onReanalyze,
+  onDownload,
+}: {
+  analysis: AnalysisResult;
+  onReset: () => void;
+  onReanalyze?: () => void;
+  onDownload: () => void;
+}) {
   return (
     <div className="flex items-center justify-between gap-4">
       <button onClick={onReset} className="group flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
@@ -141,15 +162,38 @@ function TopBar({ analysis, onReset }: { analysis: AnalysisResult; onReset: () =
         <ChevronRight className="h-3 w-3 opacity-60 transition group-hover:translate-x-0.5" />
         <span className="font-mono-tight">new investigation</span>
       </button>
-      <a
-        href={analysis.meta.url}
-        target="_blank"
-        rel="noreferrer"
-        className="flex items-center gap-2 rounded-full border border-border/60 bg-card/60 px-3 py-1.5 text-xs font-mono-tight text-muted-foreground backdrop-blur transition hover:border-amber/60 hover:text-amber"
-      >
-        <GitBranch className="h-3.5 w-3.5" />
-        {analysis.meta.fullName}
-      </a>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onDownload}
+          className="gap-1.5 font-mono-tight text-xs uppercase tracking-wider"
+        >
+          <Download className="h-3.5 w-3.5" />
+          Report PDF
+        </Button>
+        {onReanalyze && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onReanalyze}
+            title="Re-run analysis (bypass cache)"
+            className="gap-1.5 font-mono-tight text-xs uppercase tracking-wider text-muted-foreground"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            Refresh
+          </Button>
+        )}
+        <a
+          href={analysis.meta.url}
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center gap-2 rounded-full border border-border/60 bg-card/60 px-3 py-1.5 text-xs font-mono-tight text-muted-foreground backdrop-blur transition hover:border-amber/60 hover:text-amber"
+        >
+          <GitBranch className="h-3.5 w-3.5" />
+          {analysis.meta.fullName}
+        </a>
+      </div>
     </div>
   );
 }
@@ -518,9 +562,11 @@ function ChatPanel({
 function BugPanel({
   provider,
   repoContext,
+  repoUrl,
 }: {
   provider: ProviderState;
   repoContext: string;
+  repoUrl: string;
 }) {
   const [items, setItems] = useState<
     | null
@@ -531,14 +577,16 @@ function BugPanel({
         files?: string[];
         fix?: string;
       }[]
-  >(null);
+  >(() => getCachedTask(repoUrl, provider.model, "bugs"));
   const { loading, error, call } = useTaskCall(provider);
 
   const run = async () => {
     const res = await call({ ...baseArgs(provider, repoContext), kind: "bugs" });
     if (res.jsonString) {
       const parsed = JSON.parse(res.jsonString) as { items?: typeof items };
-      setItems(parsed.items ?? []);
+      const next = parsed.items ?? [];
+      setItems(next);
+      saveTask(repoUrl, provider.model, "bugs", next);
     }
   };
 
@@ -588,17 +636,29 @@ function BugPanel({
   );
 }
 
-function RefactorPanel({ provider, repoContext }: { provider: ProviderState; repoContext: string }) {
+function RefactorPanel({
+  provider,
+  repoContext,
+  repoUrl,
+}: {
+  provider: ProviderState;
+  repoContext: string;
+  repoUrl: string;
+}) {
   const [data, setData] = useState<null | {
     restructure?: { from: string; to: string; why: string }[];
     duplication?: { where: string; note: string }[];
     naming?: { file: string; suggestion: string }[];
     performance?: { where: string; suggestion: string }[];
-  }>(null);
+  }>(() => getCachedTask(repoUrl, provider.model, "refactor"));
   const { loading, error, call } = useTaskCall(provider);
   const run = async () => {
     const res = await call({ ...baseArgs(provider, repoContext), kind: "refactor" });
-    if (res.jsonString) setData(JSON.parse(res.jsonString));
+    if (res.jsonString) {
+      const parsed = JSON.parse(res.jsonString);
+      setData(parsed);
+      saveTask(repoUrl, provider.model, "refactor", parsed);
+    }
   };
   return (
     <PanelShell
@@ -736,7 +796,15 @@ function LearningPanel({ provider, repoContext }: { provider: ProviderState; rep
   );
 }
 
-function RoadmapPanel({ provider, repoContext }: { provider: ProviderState; repoContext: string }) {
+function RoadmapPanel({
+  provider,
+  repoContext,
+  repoUrl,
+}: {
+  provider: ProviderState;
+  repoContext: string;
+  repoUrl: string;
+}) {
   const [items, setItems] = useState<
     | null
     | {
@@ -746,13 +814,15 @@ function RoadmapPanel({ provider, repoContext }: { provider: ProviderState; repo
         businessValue: string;
         why: string;
       }[]
-  >(null);
+  >(() => getCachedTask(repoUrl, provider.model, "roadmap"));
   const { loading, error, call } = useTaskCall(provider);
   const run = async () => {
     const res = await call({ ...baseArgs(provider, repoContext), kind: "roadmap" });
     if (res.jsonString) {
       const parsed = JSON.parse(res.jsonString) as { items?: typeof items };
-      setItems(parsed.items ?? []);
+      const next = parsed.items ?? [];
+      setItems(next);
+      saveTask(repoUrl, provider.model, "roadmap", next);
     }
   };
   const pColor = (p: string) =>
