@@ -41,7 +41,7 @@ export function parseRepoUrl(url: string): { owner: string; repo: string } | nul
 function ghHeaders(token?: string): Record<string, string> {
   const h: Record<string, string> = {
     Accept: "application/vnd.github+json",
-    "User-Agent": "CodeSherlock-AI",
+    "User-Agent": "CodeSherlock",
     "X-GitHub-Api-Version": "2022-11-28",
   };
   if (token) h.Authorization = `Bearer ${token}`;

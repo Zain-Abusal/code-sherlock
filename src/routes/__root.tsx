@@ -77,10 +77,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "CodeSherlock AI — Understand any codebase in 60 seconds" },
+      { title: "CodeSherlock — Understand any codebase in 60 seconds" },
       { name: "description", content: "Drop a GitHub URL, get a beautiful interactive dashboard: architecture map, health score, bug hunt, docs, and Q&A. BYO API key. No vendor lock-in." },
       { name: "author", content: "CodeSherlock" },
-      { property: "og:title", content: "CodeSherlock AI" },
+      { property: "og:title", content: "CodeSherlock" },
       { property: "og:description", content: "Your senior engineer that understands any codebase in under 60 seconds." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

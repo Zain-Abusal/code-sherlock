@@ -80,7 +80,7 @@ async function callOpenAICompatible(input: LLMCallInput): Promise<string> {
   if (input.apiKey) headers.Authorization = `Bearer ${input.apiKey}`;
   if (input.provider === "openrouter") {
     headers["HTTP-Referer"] = "https://codesherlock.ai";
-    headers["X-Title"] = "CodeSherlock AI";
+    headers["X-Title"] = "CodeSherlock";
   }
 
   const res = await fetch(`${base}/chat/completions`, {
