@@ -562,9 +562,11 @@ function ChatPanel({
 function BugPanel({
   provider,
   repoContext,
+  repoUrl,
 }: {
   provider: ProviderState;
   repoContext: string;
+  repoUrl: string;
 }) {
   const [items, setItems] = useState<
     | null
@@ -575,14 +577,16 @@ function BugPanel({
         files?: string[];
         fix?: string;
       }[]
-  >(null);
+  >(() => getCachedTask(repoUrl, provider.model, "bugs"));
   const { loading, error, call } = useTaskCall(provider);
 
   const run = async () => {
     const res = await call({ ...baseArgs(provider, repoContext), kind: "bugs" });
     if (res.jsonString) {
       const parsed = JSON.parse(res.jsonString) as { items?: typeof items };
-      setItems(parsed.items ?? []);
+      const next = parsed.items ?? [];
+      setItems(next);
+      saveTask(repoUrl, provider.model, "bugs", next);
     }
   };
 
@@ -632,17 +636,29 @@ function BugPanel({
   );
 }
 
-function RefactorPanel({ provider, repoContext }: { provider: ProviderState; repoContext: string }) {
+function RefactorPanel({
+  provider,
+  repoContext,
+  repoUrl,
+}: {
+  provider: ProviderState;
+  repoContext: string;
+  repoUrl: string;
+}) {
   const [data, setData] = useState<null | {
     restructure?: { from: string; to: string; why: string }[];
     duplication?: { where: string; note: string }[];
     naming?: { file: string; suggestion: string }[];
     performance?: { where: string; suggestion: string }[];
-  }>(null);
+  }>(() => getCachedTask(repoUrl, provider.model, "refactor"));
   const { loading, error, call } = useTaskCall(provider);
   const run = async () => {
     const res = await call({ ...baseArgs(provider, repoContext), kind: "refactor" });
-    if (res.jsonString) setData(JSON.parse(res.jsonString));
+    if (res.jsonString) {
+      const parsed = JSON.parse(res.jsonString);
+      setData(parsed);
+      saveTask(repoUrl, provider.model, "refactor", parsed);
+    }
   };
   return (
     <PanelShell
@@ -780,7 +796,15 @@ function LearningPanel({ provider, repoContext }: { provider: ProviderState; rep
   );
 }
 
-function RoadmapPanel({ provider, repoContext }: { provider: ProviderState; repoContext: string }) {
+function RoadmapPanel({
+  provider,
+  repoContext,
+  repoUrl,
+}: {
+  provider: ProviderState;
+  repoContext: string;
+  repoUrl: string;
+}) {
   const [items, setItems] = useState<
     | null
     | {
@@ -790,13 +814,15 @@ function RoadmapPanel({ provider, repoContext }: { provider: ProviderState; repo
         businessValue: string;
         why: string;
       }[]
-  >(null);
+  >(() => getCachedTask(repoUrl, provider.model, "roadmap"));
   const { loading, error, call } = useTaskCall(provider);
   const run = async () => {
     const res = await call({ ...baseArgs(provider, repoContext), kind: "roadmap" });
     if (res.jsonString) {
       const parsed = JSON.parse(res.jsonString) as { items?: typeof items };
-      setItems(parsed.items ?? []);
+      const next = parsed.items ?? [];
+      setItems(next);
+      saveTask(repoUrl, provider.model, "roadmap", next);
     }
   };
   const pColor = (p: string) =>
