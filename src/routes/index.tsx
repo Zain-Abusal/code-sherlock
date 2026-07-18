@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ArrowRight, Github, Sparkles } from "lucide-react";
+import { ArrowRight, Clock, Github, Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,11 @@ import {
   type AnalysisResult,
 } from "@/lib/analyze.functions";
 import { PROVIDERS } from "@/lib/providers";
+import {
+  getCachedAnalysis,
+  saveAnalysis,
+  listRecent,
+} from "@/lib/analysis-cache";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -35,12 +40,14 @@ function Index() {
     model: "gpt-4o-mini",
   });
   const [heroError, setHeroError] = useState<string | null>(null);
+  const [recent, setRecent] = useState<ReturnType<typeof listRecent>>([]);
 
   useEffect(() => {
     setProvider(loadProviderState());
+    setRecent(listRecent());
   }, []);
 
-  const analyze = async () => {
+  const analyze = async (opts: { force?: boolean } = {}) => {
     const url = repoUrl.trim();
     if (!url) {
       setHeroError("Paste a GitHub URL first.");
@@ -51,6 +58,15 @@ function Index() {
       return;
     }
     setHeroError(null);
+
+    if (!opts.force) {
+      const cached = getCachedAnalysis(url, provider.model);
+      if (cached) {
+        setPhase({ kind: "ready", analysis: cached });
+        return;
+      }
+    }
+
     setPhase({ kind: "loading", repoUrl: url, error: null });
     try {
       const analysis = await analyzeRepo({
@@ -63,6 +79,8 @@ function Index() {
           githubToken: provider.githubToken,
         },
       });
+      saveAnalysis(url, provider.model, analysis);
+      setRecent(listRecent());
       setPhase({ kind: "ready", analysis });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -75,10 +93,13 @@ function Index() {
       <Dashboard
         analysis={phase.analysis}
         provider={provider}
+        repoUrl={repoUrl || phase.analysis.meta.url}
         onReset={() => {
           setPhase({ kind: "hero" });
           setRepoUrl("");
+          setRecent(listRecent());
         }}
+        onReanalyze={() => analyze({ force: true })}
       />
     );
   }
@@ -89,11 +110,11 @@ function Index() {
         <TopNav provider={provider} setProvider={setProvider} />
         <SherlockLoading repoUrl={phase.repoUrl} error={phase.error} />
         {phase.error && (
-          <div className="mx-auto mt-4 max-w-2xl px-6 text-center">
-            <Button
-              variant="outline"
-              onClick={() => setPhase({ kind: "hero" })}
-            >
+          <div className="mx-auto mt-4 flex max-w-2xl flex-wrap justify-center gap-2 px-6">
+            <Button onClick={() => analyze({ force: true })} className="gap-1">
+              Retry analysis
+            </Button>
+            <Button variant="outline" onClick={() => setPhase({ kind: "hero" })}>
               Try another repository
             </Button>
           </div>
@@ -165,6 +186,27 @@ function Index() {
             )}
           </div>
         </form>
+
+        {recent.length > 0 && (
+          <div className="mt-6 flex w-full max-w-2xl flex-wrap items-center justify-center gap-2 text-xs font-mono-tight text-muted-foreground">
+            <Clock className="h-3 w-3" />
+            <span>recent:</span>
+            {recent.slice(0, 4).map((r) => (
+              <button
+                key={`${r.repoUrl}-${r.model}`}
+                type="button"
+                onClick={() => {
+                  setRepoUrl(r.repoUrl);
+                  const cached = getCachedAnalysis(r.repoUrl, r.model);
+                  if (cached) setPhase({ kind: "ready", analysis: cached });
+                }}
+                className="rounded-full border border-border/60 bg-card/40 px-2.5 py-1 text-foreground/80 hover:border-amber hover:text-amber"
+              >
+                {r.fullName}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="mt-16 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs font-mono-tight uppercase tracking-widest text-muted-foreground">
           <span>Works with</span>
