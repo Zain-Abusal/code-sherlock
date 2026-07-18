@@ -18,7 +18,7 @@ Your AI Senior Engineer.
 </a>
 
 <a href="LICENSE">
-<img src="https://img.shields.io/github/license/Zain-Abusal/code-sherlock?style=for-the-badge">
+<img src="https://img.shields.io/badge/license-MIT-blue?style=for-the-badge">
 </a>
 
 <img src="https://img.shields.io/github/stars/Zain-Abusal/code-sherlock?style=for-the-badge">
@@ -145,9 +145,32 @@ If CodeSherlock saves you time or helps your team, consider supporting the proje
 <img src="https://github-readme-activity-graph.vercel.app/graph?username=Zain-Abusal">
 
 </p>
+---
+
+## AI-Assisted Development
+
+This project was developed with support from OpenAI tools, including Codex and GPT-5.6, which were used as engineering assistants throughout the process.
+
+GPT-5.6 helped with:
+- Refining the initial project idea and feature direction
+- Designing the user workflow and system flow
+- Exploring improvements and possible approaches
+- Generating concepts for visuals, UI ideas, and documentation
+
+Codex was used during development to:
+- Review project files and overall structure
+- Suggest improvements to organization and implementation
+- Identify potential issues and optimization opportunities
+- Assist with debugging and code quality improvements
+
+AI tools were used as collaborators for planning, review, and iteration. Final decisions around architecture, implementation, and design were made throughout the development process.
+
+
 
 ---
 
 ## License
 
 MIT © Zain Abusal
+
+
